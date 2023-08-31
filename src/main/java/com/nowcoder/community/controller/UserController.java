@@ -1,5 +1,7 @@
 package com.nowcoder.community.controller;
 
+import com.nowcoder.community.annotation.LoginRequired;
+import com.nowcoder.community.dao.UserMapper;
 import com.nowcoder.community.entity.User;
 import com.nowcoder.community.service.UserService;
 import com.nowcoder.community.util.CommunityUtil;
@@ -44,11 +46,16 @@ public class UserController {
     @Autowired
     private HostHolder hostHolder;
 
+    @Autowired
+    private UserMapper userMapper;
+
+    @LoginRequired
     @RequestMapping(path = "/setting",method = RequestMethod.GET)
     public String getSettingPage(){
         return "/site/setting";
     }
 
+    @LoginRequired
     @RequestMapping(path="/upload", method = RequestMethod.POST)
     public String uploadHeader(MultipartFile headerImage, Model model){
         if(headerImage == null){
@@ -96,7 +103,7 @@ public class UserController {
             byte[] buffer = new byte[1024];
             int b = 0;
             while((b = fis.read(buffer)) != -1){
-                os.write(buffer,0,b);
+                os.write(buffer,0, b);
             }
         } catch (IOException e) {
             logger.error("读取头像失败:"+e.getMessage());
@@ -104,4 +111,40 @@ public class UserController {
         }
     }
 
+    @LoginRequired
+    @RequestMapping(path = "/modifyPassword", method = RequestMethod.POST)
+    public String modifyPassword(String originalPassword, String newPassword1, String newPassword2, Model model){
+        if(StringUtils.isBlank(originalPassword)){
+            model.addAttribute("originPasswordMsg","密码不能为空！");
+            System.out.println("密码不能为空！");
+            return "/site/setting";
+        }
+        if(StringUtils.isBlank(newPassword1)){
+            model.addAttribute("newPasswordMsg1","密码不能为空！");
+            return "/site/setting";
+        }
+        if(StringUtils.isBlank(newPassword2)){
+            model.addAttribute("newPasswordMsg2","密码不能为空！");
+            return "/site/setting";
+        }
+
+        User user = hostHolder.getUser();
+        if(!user.getPassword().equals(CommunityUtil.md5(originalPassword+user.getSalt()))){  // 原密码不正确
+            model.addAttribute("originPasswordMsg","密码不正确！");
+            System.out.println("密码不正确！");
+            return "/site/setting";
+        }
+        if(!newPassword1.equals(newPassword2)){  // 新密码两次输入不一致
+            model.addAttribute("newPasswordMsg2","两次密码不一致！");
+            return "/site/setting";
+        }
+        try {  // 修改数据库中密码
+            userMapper.updatePassword(user.getId(), CommunityUtil.md5(newPassword1+user.getSalt()));
+            return "redirect:/index";
+        } catch (Exception e) {
+            logger.error("修改密码失败："+e.getMessage());
+            throw new RuntimeException(e);
+        }
+
+    }
 }

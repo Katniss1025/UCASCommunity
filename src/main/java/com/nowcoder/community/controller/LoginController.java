@@ -1,12 +1,17 @@
 package com.nowcoder.community.controller;
 
 import com.google.code.kaptcha.Producer;
+import com.nowcoder.community.dao.UserMapper;
 import com.nowcoder.community.entity.User;
 import com.nowcoder.community.service.UserService;
 import com.nowcoder.community.util.CommunityConstant;
+import com.nowcoder.community.util.CommunityUtil;
+import com.nowcoder.community.util.MailClient;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
@@ -28,11 +33,19 @@ public class LoginController implements CommunityConstant {
     private static final Logger logger = LoggerFactory.getLogger(LoginController.class);
 
     @Autowired
+    private UserMapper userMapper;
+
+    @Autowired
     private UserService userService;
 
     @Autowired
     private Producer kaptchaProducer;
 
+    @Autowired
+    private MailClient mailClient;
+
+    @Autowired
+    private TemplateEngine templateEngine;
 
     @RequestMapping(path="/register", method=RequestMethod.GET)
     public String getRegisterPage(){
@@ -136,44 +149,57 @@ public class LoginController implements CommunityConstant {
         return "/site/forget";
     }
 
-    @RequestMapping(path="/forget/code", method = RequestMethod.GET)
-    public String getForgetCode(String email, HttpSession session, Model model){
+    // 获取验证码
+    @RequestMapping(path = "/getCode", method = RequestMethod.GET)
+    @ResponseBody
+    public String getForgetCode(String email, HttpSession session, Model model) {
         System.out.println(email);
-        Map<String,Object> map = userService.sendVerifyCode(email);
-        if(map.containsKey("emailMsg")){ // 邮箱为空 或 邮箱没被注册过
-            model.addAttribute("emailMsg", map.get("emailMsg"));
-            return "/site/forget";
+        if (StringUtils.isBlank(email)) {
+            model.addAttribute("emailMsg","邮箱不能为空！");
+            return CommunityUtil.getJSONString(1, "邮箱不能为空！");
         }
-        // 被注册过，发送邮件
-        User user = (User) map.get("user");
-        String code = (String) map.get("code");
-        session.setAttribute("verifyCode",code);
-        return "site/forget";
 
+        User user = userMapper.selectByEmail(email);
+        if (user == null) {
+            model.addAttribute("emailMsg","邮箱尚未注册！");
+            return CommunityUtil.getJSONString(1, "邮箱尚未注册！");
+        }
+
+        if (user.getStatus() == 0) {
+            model.addAttribute("emailMsg","邮箱未激活！");
+            return CommunityUtil.getJSONString(1, "邮箱未激活！");
+        }
+
+        // 发送邮件
+        Context context = new Context();
+        context.setVariable("email", email);
+        String code = CommunityUtil.generateUUID().substring(0, 4);
+        context.setVariable("verifyCode", code);
+        String content = templateEngine.process("/mail/forget", context);
+        mailClient.sendMail(email, "果壳网-找回密码", content);
+        System.out.println("邮件发送成功");
+
+        // 保存验证码到session
+        session.setAttribute("verifyCode", code);
+
+        return CommunityUtil.getJSONString(0,"发送成功！");
     }
 
-    @RequestMapping(path="/forget", method=RequestMethod.POST)
-    public String forgetPassword(String email, String password, String code, Model model, HttpSession session){
-        Map<String,Object> map = userService.resetPassword(email, password, code);
-        String verifyCode = (String) session.getAttribute("code");
-
-        System.out.println("code:"+code);
-        System.out.println("verifyCode:"+verifyCode);
-
-        if(verifyCode!=null && !verifyCode.equals(code)){ // 验证码不匹配
-            model.addAttribute("codeMsg","验证码错误!");
-            return "site/forget";
+    // 重置密码
+    @RequestMapping(path = "/forget/password", method = RequestMethod.POST)
+    public String resetPassword(String email, String verifyCode, String password, Model model, HttpSession session) {
+        String code = (String) session.getAttribute("verifyCode");
+        if (StringUtils.isBlank(verifyCode) || StringUtils.isBlank(code) || !code.equalsIgnoreCase(verifyCode)) {
+            model.addAttribute("codeMsg", "验证码错误!");
+            return "/site/forget";
         }
-        // 验证码匹配
-        if(map==null || map.isEmpty()){ // 更改成功
+
+        Map<String, Object> map = userService.resetPassword(email, password);
+        if (map.containsKey("user")) {
             return "redirect:/login";
         } else {
             model.addAttribute("emailMsg", map.get("emailMsg"));
             model.addAttribute("passwordMsg", map.get("passwordMsg"));
-            model.addAttribute("codeMsg", map.get("codeMsg"));
-            System.out.println(map.get("emailMsg"));
-            System.out.println(map.get("passwordMsg"));
-            System.out.println(map.get("codeMsg"));
             return "/site/forget";
         }
     }

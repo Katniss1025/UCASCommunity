@@ -149,56 +149,32 @@ public class UserService implements CommunityConstant {
         loginTicketMapper.updateStatus(ticket, 1);  // 将ticket设置为无效
     }
 
-    public Map<String,Object> resetPassword(String email, String password, String code){
-        Map<String,Object> map = new HashMap<>();
+    // 重置密码
+    public Map<String, Object> resetPassword(String email, String password) {
+        Map<String, Object> map = new HashMap<>();
+
+        // 空值处理
+        if (StringUtils.isBlank(email)) {
+            map.put("emailMsg", "邮箱不能为空!");
+            return map;
+        }
+        if (StringUtils.isBlank(password)) {
+            map.put("passwordMsg", "密码不能为空!");
+            return map;
+        }
+
+        // 验证邮箱
         User user = userMapper.selectByEmail(email);
-        // 空值判断
-        if(StringUtils.isBlank(email)){
-            map.put("emailMsg","邮箱不能为空！");
-            return map;
-        }
-        if(StringUtils.isBlank(password)){
-            map.put("passwordMsg","密码不能为空！");
-            return map;
-        }
-        if(StringUtils.isBlank(code)){
-            map.put("codeMsg","验证码不能为空！");
-            return map;
-        }
-        // 验证账号合法性
-        if(user == null){ // 没被注册过
-            map.put("emailMsg","邮箱未被注册过");
-            return map;
-        } else {  // 邮箱被注册过
-            int id = user.getId();
-            userMapper.updatePassword(id,CommunityUtil.md5(password+user.getSalt()));
-        }
-        return map;
-    }
-
-    public Map<String,Object> sendVerifyCode(String email){
-        Map<String,Object> map = new HashMap<>();
-        // 空值判断
-        if(StringUtils.isBlank(email)){
-            map.put("emailMsg","邮箱不能为空！");
-            return map;
-        }
-        User user = userMapper.selectByEmail(email);
-        if(user==null){ // 没被注册
-            map.put("emailMsg","邮箱未被注册过");
+        if (user == null) {
+            map.put("emailMsg", "该邮箱尚未注册!");
             return map;
         }
 
-        // 发送验证码
-        Context context = new Context();
-        context.setVariable("email", user.getEmail());
-        // http://localhost:8080/community/activation/101/code
-        String code = CommunityUtil.generateUUID().substring(0, 5);
-        context.setVariable("code", code);
-        String content = templateEngine.process("/mail/forgetPassword", context);
-        mailClient.sendMail(user.getEmail(), "果壳网-找回密码", content);
-        map.put("code",code);
+        // 重置密码
+        password = CommunityUtil.md5(password + user.getSalt());
+        userMapper.updatePassword(user.getId(), password);
 
+        map.put("user", user);
         return map;
     }
 
