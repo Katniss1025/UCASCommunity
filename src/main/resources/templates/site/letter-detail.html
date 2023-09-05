@@ -124,7 +124,9 @@
 						<div class="toast-header">
 							<strong class="mr-auto" th:utext="${map.fromUser.username}">落基山脉下的闲人</strong>
 							<small th:text="${#dates.format(map.letter.createTime,'yyyy-MM-dd HH:mm:ss')}">2019-04-25 15:49:32</small>
-							<button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="Close">
+							<!--删除时依赖的条件-->
+							<input type="hidden" th:value="${map.letter.id}" id="delete">
+							<button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="Close" onclick="deleteLetter();">
 								<span aria-hidden="true">&times;</span>
 							</button>
 						</div>
@@ -222,6 +224,24 @@
 <script>
 	function back() {
 		location.href = CONTEXT_PATH + "/letter/list";
+	}
+</script>
+
+<script>
+	function deleteLetter() {
+		// var id = $("delete").val();
+		var id = document.getElementById('delete').value;
+		console.log(id);
+		$.post(
+		    CONTEXT_PATH + "/letter/delete",
+			{"id":id},
+			function (data) {
+				data = $.parseJSON(data);
+				if(data.code == 0){
+					alert("删除成功！");
+				}
+			}
+		)
 	}
 </script>
 </body>
