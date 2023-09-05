@@ -117,7 +117,7 @@ public class MessageController {
         if(letterList != null){
             for(Message message: letterList){
                 if(hostHolder.getUser().getId() == message.getToId() && message.getStatus() == 0){
-                    ids.add(message.getToId());
+                    ids.add(message.getId());
                 }
             }
         }
